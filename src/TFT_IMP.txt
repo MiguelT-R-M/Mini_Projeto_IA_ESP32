@@ -1,0 +1,157 @@
+// Base de método com tela TFT portátil
+#define CAMERA_MODEL_ESP32S3_EYE
+
+#include "camera_pins.h"
+#include <Arduino.h>
+#include "esp_camera.h"
+#include <SPI.h>
+#include <TFT_eSPI.h> // Hardware-accelerated graphics library
+
+#include <human_face_detect_msr01.hpp>
+
+// Initialize TFT display instance
+TFT_eSPI tft = TFT_eSPI(); 
+
+TaskHandle_t aiTaskHandle = NULL;
+
+// Helper function to draw a bounding box directly onto the RGB565 frame buffer
+void drawBox(uint16_t *buffer, int imgWidth, int imgHeight, int x1, int y1, int x2, int y2, uint16_t color, int thickness = 2) {
+    int start_x = max(0, min(x1, imgWidth - 1));
+    int start_y = max(0, min(y1, imgHeight - 1));
+    int end_x = max(0, min(x2, imgWidth - 1));
+    int end_y = max(0, min(y2, imgHeight - 1));
+
+    for (int t = 0; t < thickness; t++) {
+        int cur_y1 = min(start_y + t, imgHeight - 1);
+        int cur_y2 = max(end_y - t, 0);
+        int cur_x1 = min(start_x + t, imgWidth - 1);
+        int cur_x2 = max(end_x - t, 0);
+
+        // Draw top and bottom horizontal lines
+        for (int px = start_x; px <= end_x; px++) {
+            buffer[cur_y1 * imgWidth + px] = color;
+            buffer[cur_y2 * imgWidth + px] = color;
+        }
+        // Draw left and right vertical lines
+        for (int py = start_y; py <= end_y; py++) {
+            buffer[py * imgWidth + cur_x1] = color;
+            buffer[py * imgWidth + cur_x2] = color;
+        }
+    }
+}
+
+// Combined AI & Display Task running on Core 1
+void visionTask(void *pvParameters) {
+  vTaskDelay(pdMS_TO_TICKS(3000)); // Allow camera and display to stabilize
+  
+  HumanFaceDetectMSR01 detector(0.3F, 0.5F, 10, 0.2F);
+
+  Serial.println("Vision Task running on Core 1 (Direct TFT Pipeline)...");
+
+  while (1) {
+      camera_fb_t *fb = esp_camera_fb_get();
+      
+      if (fb != nullptr) {
+          if (fb->format == PIXFORMAT_RGB565) {
+              std::vector<int> shape = {(int)fb->height, (int)fb->width, 3};
+              
+              // 1. Run AI inference on the raw frame buffer
+              std::list<dl::detect::result_t> results = detector.infer((uint16_t *)fb->buf, shape);
+
+              if (!results.empty()) {
+                  for (const auto &res : results) {
+                      int x1 = res.box[0];
+                      int y1 = res.box[1];
+                      int x2 = res.box[2];
+                      int y2 = res.box[3];
+
+                      // 2. Draw green box directly onto pixels
+                      drawBox((uint16_t *)fb->buf, fb->width, fb->height, 
+                              x1, y1, x2, y2, 
+                              0x07E0, 3);
+                  }
+              }
+
+              // 3. Push the annotated frame buffer directly to the TFT display via DMA/SPI
+              // Assuming a 320x240 QVGA display matching camera resolution
+              tft.pushImage(0, 0, fb->width, fb->height, (uint16_t *)fb->buf);
+          }
+          // 4. Release frame back to camera driver
+          esp_camera_fb_return(fb);
+      }
+
+      // No manual delay needed; frame rate is naturally paced by camera capture & SPI push speed (~15-20 FPS)
+  }
+}
+
+void setup() {
+  delay(2000);
+  Serial.begin(115200);
+  Serial.setDebugOutput(true);
+  Serial.println();
+
+  // Initialize TFT Display
+  tft.init();
+  tft.setRotation(1); // Adjust rotation as needed (0-3)
+  tft.fillScreen(TFT_BLACK);
+
+  // Initialize Camera Configuration
+  camera_config_t config;
+  config.ledc_channel = LEDC_CHANNEL_0;
+  config.ledc_timer = LEDC_TIMER_0;
+  config.pin_d0 = Y2_GPIO_NUM;
+  config.pin_d1 = Y3_GPIO_NUM;
+  config.pin_d2 = Y4_GPIO_NUM;
+  config.pin_d3 = Y5_GPIO_NUM;
+  config.pin_d4 = Y6_GPIO_NUM;
+  config.pin_d5 = Y7_GPIO_NUM;
+  config.pin_d6 = Y8_GPIO_NUM;
+  config.pin_d7 = Y9_GPIO_NUM;
+  config.pin_xclk = XCLK_GPIO_NUM;
+  config.pin_pclk = PCLK_GPIO_NUM;
+  config.pin_vsync = VSYNC_GPIO_NUM;
+  config.pin_href = HREF_GPIO_NUM;
+  config.pin_sccb_sda = SIOD_GPIO_NUM;
+  config.pin_sccb_scl = SIOC_GPIO_NUM;
+  config.pin_pwdn = PWDN_GPIO_NUM;
+  config.pin_reset = RESET_GPIO_NUM;
+  config.xclk_freq_hz = 20000000;
+  config.frame_size = FRAMESIZE_QVGA;     // 320x240
+  config.pixel_format = PIXFORMAT_RGB565; // Native 16-bit color format
+  config.grab_mode = CAMERA_GRAB_LATEST;
+  config.fb_location = CAMERA_FB_IN_PSRAM;
+  config.fb_count = 2;                    // Double buffering for smooth flow
+
+  esp_err_t err = esp_camera_init(&config);
+  if (err != ESP_OK) {
+    Serial.printf("Camera init failed with error 0x%x", err);
+    return;
+  }
+
+  sensor_t *s = esp_camera_sensor_get();
+  if (s->id.PID == OV3660_PID) {
+    s->set_vflip(s, 1);
+    s->set_brightness(s, 1);
+    s->set_saturation(s, -2);
+  }
+
+#if defined(CAMERA_MODEL_ESP32S3_EYE)
+  s->set_vflip(s, 1);
+#endif
+
+  // Create the unified vision task on Core 1 (leaving Core 0 free for background system tasks/WiFi if needed)
+  xTaskCreatePinnedToCore(
+      visionTask,     
+      "Vision_Task",  
+      8192,           
+      NULL,           
+      2,              
+      &aiTaskHandle,  
+      1               
+  );
+}
+
+void loop() {
+  // Main loop remains empty because FreeRTOS manages execution on the assigned cores.
+  vTaskDelay(pdMS_TO_TICKS(10000));
+}
