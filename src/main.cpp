@@ -260,8 +260,8 @@ void aiTask(void *pvParameters) {
                         // Calculo de interseção iou
                         float iou = (union_area > 0) ? (float)inter_area / union_area : 0.0f;
 
-                        // Se tiver um IOU acima de 0.32, face encontrada!
-                        if (iou > 0.32f) {
+                        // Se tiver um IOU acima de 0.75, face encontrada! (Muito abaixo gera conflitos, muito acima gera dificuldades de identificação, talvez seja possível otimizar isso)
+                        if (iou > 0.75f) {
                             displayName = String(profile.name);
                             break;
                         }
