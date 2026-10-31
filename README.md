@@ -20,8 +20,9 @@ O projeto foi desenvolvido primariamente no PlatformIO e tem a capacidade de det
         ESP HTTP Server (com endpoints para /stream, /register e /logs)
 
     Precisão e Desempenho:
-    O sistema utiliza um cálculo otimizado de sobreposição (IoU - Intersection over Union) para rastreamento e reconhecimento facial. 
-    A taxa de acerto é alta sob condições de iluminação e ângulos similares.
+        O sistema utiliza um cálculo otimizado de sobreposição (IoU - Intersection over Union)
+        para o rastreamento e reconhecimento facial. 
+        A taxa de acerto é alta sob condições de iluminação e ângulos similares.
 
 ## 🇺🇸 English
 
