@@ -20,7 +20,8 @@ O projeto foi desenvolvido primariamente no PlatformIO e tem a capacidade de det
         ESP HTTP Server (com endpoints para /stream, /register e /logs)
 
     Precisão e Desempenho:
-    O sistema utiliza um cálculo otimizado de sobreposição (IoU - Intersection over Union) para rastreamento e reconhecimento facial. A taxa de acerto é alta sob condições de iluminação e ângulos similares.
+    O sistema utiliza um cálculo otimizado de sobreposição (IoU - Intersection over Union) para rastreamento e reconhecimento facial. 
+    A taxa de acerto é alta sob condições de iluminação e ângulos similares.
 
 ## 🇺🇸 English
 
@@ -78,6 +79,7 @@ Acesse pelo navegador na mesma rede Wi-Fi:
 
     http://<IP-DO-ESP32>/stream — Transmissão de vídeo em tempo real (MJPEG).
 
-    http://<IP-DO-ESP32>/register?name=SeuNome — Endpoint HTTP para registrar instantaneamente a face detectada.
+    http://<IP-DO-ESP32>/register?name=SeuNome — Endpoint HTTP para registrar instantaneamente a 
+                                                 face detectada.
 
     http://<IP-DO-ESP32>/logs — Buffer de logs do sistema acessível remotamente.
