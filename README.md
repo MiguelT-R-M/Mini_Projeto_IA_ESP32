@@ -15,7 +15,8 @@ O projeto foi desenvolvido primariamente no PlatformIO e tem a capacidade de det
 
         esp-dl (HumanFaceDetectMSR01 para detecção facial otimizada)
 
-        FreeRTOS (para tarefas concorrentes em múltiplos núcleos: IA no Core 1 e Servidor Web no Core 0)
+        FreeRTOS 
+        (para tarefas concorrentes em múltiplos núcleos: IA no Core 1 e Servidor Web no Core 0)
 
         ESP HTTP Server (com endpoints para /stream, /register e /logs)
 
