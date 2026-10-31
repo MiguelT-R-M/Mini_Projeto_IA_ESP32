@@ -68,6 +68,10 @@ This project was developed primarily on PlatformIO and features real-time face d
   <img src="./IMGS/image-7.png" alt="camus-known2" width="400">
 </p>
 
+<p align="center">
+  <img src="./IMGS/EIN_CAM.gif" alt="EIN_CAM" width="400">
+</p>
+
 # 🔌 Endpoints do Servidor Web / Web Server Endpoints
 
 Acesse pelo navegador na mesma rede Wi-Fi:
