@@ -184,10 +184,7 @@ void startMyServer() {
         httpd_register_uri_handler(server, &stream_uri);
         httpd_register_uri_handler(server, &register_uri);
         httpd_register_uri_handler(server, &logger);
-        Serial.print("Server iniciado no port 80 ip: https://");
-        Serial.print(WiFi.localIP());
-        Serial.println(" (/stream e /register e /logs)");
-
+        webLog("Server iniciado no port 80 ip: https://%s (/stream e /register e /logs)", WiFi.localIP().toString());
     }
 }
 
