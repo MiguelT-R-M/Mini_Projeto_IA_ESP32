@@ -190,117 +190,118 @@ void startMyServer() {
 
 // Função aitask, usando o Human_face_detect_msr01.hpp
 void aiTask(void *pvParameters) {
-  vTaskDelay(pdMS_TO_TICKS(3000));
-  
-  HumanFaceDetectMSR01 detector(0.12F, 0.2F, 4, 0.2F); // O mais balanceado que encontrei
-  webLog("AI Task funcionando e usando TFT_eSPI para renderizar sprites...");
+    vTaskDelay(pdMS_TO_TICKS(3000));
 
-  while (1) {
-      camera_fb_t *fb = esp_camera_fb_get();
-      
-      if (fb != nullptr) {
-          if (fb->format == PIXFORMAT_RGB565) {
-              
-              memcpy(spr.frameBuffer(0), fb->buf, fb->width * fb->height * 2);
+    HumanFaceDetectMSR01 detector(0.12F, 0.2F, 4, 0.2F); // O mais balanceado que encontrei
+    webLog("AI Task funcionando e usando TFT_eSPI para renderizar sprites...");
 
-              std::vector<int> shape = {(int)fb->height, (int)fb->width, 3};
-              std::list<dl::detect::result_t> results = detector.infer((uint16_t *)fb->buf, shape);
+    while (1) {
+        camera_fb_t *fb = esp_camera_fb_get();
+        
+        if (fb != nullptr) {
+            if (fb->format == PIXFORMAT_RGB565) {
+                
+                memcpy(spr.frameBuffer(0), fb->buf, fb->width * fb->height * 2);
 
-              char current_target[32] = "";
-              if (xSemaphoreTake(regSemaphore, portMAX_DELAY) == pdTRUE) {
-                  if (strlen(pending_registration_name) > 0) {
-                      strlcpy(current_target, pending_registration_name, sizeof(current_target));
-                      memset(pending_registration_name, 0, sizeof(pending_registration_name));
-                  }
-                  xSemaphoreGive(regSemaphore);
-              }
+                std::vector<int> shape = {(int)fb->height, (int)fb->width, 3};
+                std::list<dl::detect::result_t> results = detector.infer((uint16_t *)fb->buf, shape);
 
-              if (!results.empty()) {
-                  for (const auto &res : results) {
-                      int x1 = res.box[0];
-                      int y1 = res.box[1];
-                      int x2 = res.box[2];
-                      int y2 = res.box[3];
-
-                      String displayName = "Desconhecido";
-
-                      // Inicializador de novo rosto
-                      if (strlen(current_target) > 0) {
-                          RegisteredFace newFace;
-                          strlcpy(newFace.name, current_target, sizeof(newFace.name));
-                          newFace.reference_x1 = x1;
-                          newFace.reference_y1 = y1;
-                          newFace.reference_x2 = x2;
-                          newFace.reference_y2 = y2;
-                          database.push_back(newFace);
-                          
-                          webLog("Novo rosto registrado: %s\n", current_target);
-                          current_target[0] = '\0'; 
-                      }
-                      
-                      // Checa a base de dados para encontrar a face semelhante(Não tem persistência)
-                      for (const auto &profile : database) {
-                        // Cálculos não tão precisos e sofisticados para encontrar as razões
-                        int inter_x1 = max(x1, profile.reference_x1);
-                        int inter_y1 = max(y1, profile.reference_y1);
-                        int inter_x2 = min(x2, profile.reference_x2);
-                        int inter_y2 = min(y2, profile.reference_y2);
-
-                        int inter_w = max(0, inter_x2 - inter_x1);
-                        int inter_h = max(0, inter_y2 - inter_y1);
-                        int inter_area = inter_w * inter_h;
-
-                        int box_area = (x2 - x1) * (y2 - y1);
-                        int profile_area = (profile.reference_x2 - profile.reference_x1) * (profile.reference_y2 - profile.reference_y1);
-                        int union_area = box_area + profile_area - inter_area;
-
-                        // Calculo de interseção iou
-                        float iou = (union_area > 0) ? (float)inter_area / union_area : 0.0f;
-
-                        // Se tiver um IOU acima de 0.75, face encontrada! (Muito abaixo gera conflitos, muito acima gera dificuldades de identificação, talvez seja possível otimizar isso)
-                        if (iou > 0.75f) {
-                            displayName = String(profile.name);
-                            break;
-                        }
+                char current_target[32] = "";
+                if (xSemaphoreTake(regSemaphore, portMAX_DELAY) == pdTRUE) {
+                    if (strlen(pending_registration_name) > 0) {
+                        strlcpy(current_target, pending_registration_name, sizeof(current_target));
+                        memset(pending_registration_name, 0, sizeof(pending_registration_name));
                     }
+                    xSemaphoreGive(regSemaphore);
+                }
 
-                      //rentângulos e ascii escritos no sprite da TFT
-                      spr.drawRect(x1, y1, x2 - x1, y2 - y1, 0x07E0);
-                      spr.drawRect(x1 + 1, y1 + 1, (x2 - x1) - 2, (y2 - y1) - 2, 0x07E0);
+                if (!results.empty()) {
+                    for (const auto &res : results) {
+                        int x1 = res.box[0];
+                        int y1 = res.box[1];
+                        int x2 = res.box[2];
+                        int y2 = res.box[3];
 
-                      spr.setTextColor(0x07E0, 0x0000);
-                      spr.setTextSize(1);
-                      
-                      char labelBuffer[32];
-                      char nomeBuffer[32];
-                      snprintf(labelBuffer, sizeof(labelBuffer), "Score: %.2f", res.score);
-                      snprintf(nomeBuffer, sizeof(nomeBuffer), "Nome: %s", displayName.c_str());
+                        String displayName = "Desconhecido";
 
-                      spr.drawString(labelBuffer, x1, max(0, y1 - 16), 2);
-                      spr.drawString(nomeBuffer, x1, y2, 2);
-                  }
-              }
+                        // Inicializador de novo rosto
+                        if (strlen(current_target) > 0) {
+                            RegisteredFace newFace;
+                            strlcpy(newFace.name, current_target, sizeof(newFace.name));
+                            newFace.reference_x1 = x1;
+                            newFace.reference_y1 = y1;
+                            newFace.reference_x2 = x2;
+                            newFace.reference_y2 = y2;
+                            database.push_back(newFace);
+                            
+                            webLog("Novo rosto registrado: %s\n", current_target);
+                            current_target[0] = '\0'; 
+                        }
+                        
+                        float iou = 0.0;
+                        // Checa a base de dados para encontrar a face semelhante(Não tem persistência)
+                        for (const auto &profile : database) {
+                            // Cálculos não tão precisos e sofisticados para encontrar as razões
+                            int inter_x1 = max(x1, profile.reference_x1);
+                            int inter_y1 = max(y1, profile.reference_y1);
+                            int inter_x2 = min(x2, profile.reference_x2);
+                            int inter_y2 = min(y2, profile.reference_y2);
 
-              memcpy(fb->buf, spr.frameBuffer(0), fb->width * fb->height * 2);
+                            int inter_w = max(0, inter_x2 - inter_x1);
+                            int inter_h = max(0, inter_y2 - inter_y1);
+                            int inter_area = inter_w * inter_h;
 
-              uint8_t *jpg_buf = nullptr;
-              size_t jpg_len = 0;
-              if (frame2jpg(fb, 80, &jpg_buf, &jpg_len)) {
-                  if (xSemaphoreTake(jpgSemaphore, portMAX_DELAY) == pdTRUE) {
-                      if (global_jpg_buf) free(global_jpg_buf);
-                      global_jpg_buf = jpg_buf;
-                      global_jpg_len = jpg_len;
-                      xSemaphoreGive(jpgSemaphore);
-                  } else {
-                      free(jpg_buf);
-                  }
-              }
-          }
-          esp_camera_fb_return(fb);
-      }
+                            int box_area = (x2 - x1) * (y2 - y1);
+                            int profile_area = (profile.reference_x2 - profile.reference_x1) * (profile.reference_y2 - profile.reference_y1);
+                            int union_area = box_area + profile_area - inter_area;
 
-      vTaskDelay(pdMS_TO_TICKS(60));
-  }
+                            // Calculo de interseção iou
+                            iou = (union_area > 0) ? (float)inter_area / union_area : 0.0f;
+
+                            // Se tiver um IOU acima de 0.73, face encontrada! (Muito abaixo gera conflitos, muito acima gera dificuldades de identificação, talvez seja possível otimizar isso)
+                            if (iou > 0.73f) {
+                                displayName = String(profile.name);
+                                break;
+                            }
+                        }
+
+                        //rentângulos e ascii escritos no sprite da TFT
+                        spr.drawRect(x1, y1, x2 - x1, y2 - y1, 0x07E0);
+                        spr.drawRect(x1 + 1, y1 + 1, (x2 - x1) - 2, (y2 - y1) - 2, 0x07E0);
+
+                        spr.setTextColor(0x07E0, 0x0000);
+                        spr.setTextSize(1);
+                        
+                        char labelBuffer[32];
+                        char nomeBuffer[32];
+                        snprintf(labelBuffer, sizeof(labelBuffer), "Score: %.2f; IOU: %.2f", res.score, iou);
+                        snprintf(nomeBuffer, sizeof(nomeBuffer), "Nome: %s", displayName.c_str());
+
+                        spr.drawString(labelBuffer, x1, max(0, y1 - 16), 2);
+                        spr.drawString(nomeBuffer, x1, y2, 2);
+                    }
+                }
+
+                memcpy(fb->buf, spr.frameBuffer(0), fb->width * fb->height * 2);
+
+                uint8_t *jpg_buf = nullptr;
+                size_t jpg_len = 0;
+                if (frame2jpg(fb, 80, &jpg_buf, &jpg_len)) {
+                    if (xSemaphoreTake(jpgSemaphore, portMAX_DELAY) == pdTRUE) {
+                        if (global_jpg_buf) free(global_jpg_buf);
+                        global_jpg_buf = jpg_buf;
+                        global_jpg_len = jpg_len;
+                        xSemaphoreGive(jpgSemaphore);
+                    } else {
+                        free(jpg_buf);
+                    }
+                }
+            }
+            esp_camera_fb_return(fb);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(60));
+    }
 }
 
 void setup() {
