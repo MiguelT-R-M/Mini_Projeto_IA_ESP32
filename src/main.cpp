@@ -39,6 +39,8 @@ TFT_eSprite spr = TFT_eSprite(&tft);
 char log_buffer[2048] = "=== ESP32 Log Buffer Iniciou! ===\n";
 SemaphoreHandle_t logSemaphore = NULL;
 
+float matchVAL = 0.0;
+
 // Função para logging
 void webLog(const char* format, ...) {
     char temp[128];
@@ -77,6 +79,7 @@ static esp_err_t logs_handler(httpd_req_t *req) {
     }
     return ESP_OK;
 }
+
 
 // Buffer de nome à ser registrado
 char pending_registration_name[32] = "";
@@ -250,14 +253,16 @@ void aiTask(void *pvParameters) {
                                 webLog("Enrollment failed!\n");
                             }
                         }
-                        
+
                         // Reconhecimento facial (Executado apenas no intervalo definido)
                         if (should_recognize && strlen(current_target) == 0) {
                             face_info_t match = recognizer.recognize((uint16_t *)fb->buf, shape, mutable_keypoints);
                             if (match.similarity >= recognizer.get_thresh()) {
                                 cached_displayName = String(match.name.c_str());
+                                matchVAL = match.similarity;
                             } else {
                                 cached_displayName = "Desconhecido";
+                                matchVAL = match.similarity;
                             }
                         }
 
@@ -270,7 +275,7 @@ void aiTask(void *pvParameters) {
                         
                         char labelBuffer[32];
                         char nomeBuffer[32];
-                        snprintf(labelBuffer, sizeof(labelBuffer), "Score: %.2f", res.score);
+                        snprintf(labelBuffer, sizeof(labelBuffer), "Score: %.2f; Similaridade: %.2f", res.score, matchVAL);
                         snprintf(nomeBuffer, sizeof(nomeBuffer), "Nome: %s", cached_displayName.c_str());
 
                         spr.drawString(labelBuffer, x1, max(0, y1 - 16), 2);
